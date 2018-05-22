@@ -1,0 +1,5 @@
+Build and Reload Package:  'Ctrl + Shift + B'
+Load all:                  'Ctrl + Shift + L'
+Document:                  'Ctrl + Shift + D'
+Check Package:             'Ctrl + Shift + E'
+Test Package:              'Ctrl + Shift + T'
