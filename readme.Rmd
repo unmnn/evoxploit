@@ -1,13 +1,13 @@
 ---
 title: "evoxploit"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-<!-- github_document -->
+<!-- html_document -->
 
 ## Overview
 
