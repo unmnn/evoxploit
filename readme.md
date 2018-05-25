@@ -326,7 +326,7 @@ gain_names %>%
   coord_flip()
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-3-1.png)<!-- -->
 
 ## Bibliography
 
