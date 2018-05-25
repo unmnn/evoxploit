@@ -1,0 +1,97 @@
+---
+title: "evoxploit"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!-- github_document -->
+
+## Overview
+
+evoxploit is a package for augmenting a **longitudinal dataset**<sup>&ast;</sup> 
+with so called **evolution features** (Niemann et al., 2015) and 
+**sequence features** (Hielscher et al., 2014). Theses features reflect 
+a study participant's individual change over time, his/her change over time 
+in comparison with the cluster he/she was closest to at the baseline 
+examinations, and the change of whole participant groups. 
+
+<sup>&ast;</sup> The functions of this package require a dataframe with the 
+following variables names semantics:
+
+- Each variable name (e.g. `waist_circum_s0`) consists of a _stem_ and a _suffix_. 
+The stem is the substring until the last underscore `_` (`wairst_circum`). 
+The suffix is the substring beginning after the last underscore (`s0`).
+- The suffix indicates the study wave where the measurement was conducted. For 
+instance `s0` could represent the baseline examinations of a longitudinal 
+study, `s1` the first follow-
+up examinations, `s2` the second follow up examinations and so on.
+- All variables must have a suffix. The suffix must start with "s" and end with 
+a number.
+
+## Installation
+
+```{r, eval=FALSE}
+# Development version from Github
+devtools::install_github("unmnn/evoxploit")
+```
+
+## Usage Example
+
+<!-- The example data `epi` is a list with two elements. `data` is a dataframe  -->
+<!-- containing 19 input features -->
+
+```{r, message=FALSE, warning = FALSE, cache=TRUE}
+# Inspect example data
+library(evoxploit)
+str(epi)
+
+# Apply clustering
+clu <- clustering(epi$data, label = epi$label$label)
+str(clu)
+
+# Generate evolution features
+df_evo <- create_CBMS15_attributes(epi$data, 
+                                   label = epi$label$label,
+                                   li_clustering = clu)
+str(df_evo)
+
+
+# Generate sequence features
+df_seq <- create_IDA14_attributes(epi$data, label = epi$label$label)
+str(df_seq)
+
+# Generate simple features describing a study participant's change over time
+df_cha <- create_simple_attributes(epi$data)
+str(df_cha)
+```
+
+
+```{r, cache=TRUE, fig.height=8}
+df_combined <- bind_cols(epi$data, df_evo, df_seq, df_cha, epi$label)
+gain_names <- FSelector::gain.ratio(label ~ ., data = df_combined)
+
+gain_names %>%
+  tibble::rownames_to_column("variable") %>%
+  arrange(desc(attr_importance)) %>%
+  mutate(variable = forcats::fct_reorder(variable, attr_importance)) %>%
+  slice(1:25) %>%
+  ggplot(aes(variable, attr_importance)) +
+  geom_col() +
+  coord_flip()
+
+```
+
+
+
+## Bibliography
+
+- (Niemann et al., 2015) Uli Niemann, Tommy Hielscher, Myra Spiliopoulou, 
+Henry Völzke, and Jens-Peter Kühn. "Can we classify the participants of a 
+longitudinal epidemiological study from their previous evolution?" 
+_Proc. of IEEE Computer-Based Medical Systems_, 121-126, 2015. 
+- (Hielscher et al. 2014) Tommy Hielscher, Myra Spiliopoulou, Henry Völzke, 
+and Jens-Peter Kühn. "Mining longitudinal epidemiological data to understand a 
+reversible disorder". _Proc. of Intelligent Data Analysis_, 2014. 

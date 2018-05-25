@@ -11,7 +11,7 @@ Description: Augment evolution variables to a longitudinal study dataset.
     data comprise information from assessments that are repeatedly conducted 
     over time. 
     This package aims at exploiting temporal information inherent to these 
-    data by extracting so called "evolution features". Theses features reflect 
+    data by generating so called "evolution features". Theses features reflect 
     a study participant's individual change over time, his/her change over time 
     in comparison with the cluster he/she was closest to at the baseline 
     examinations, and the change of whole participant groups. 

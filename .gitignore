@@ -4,3 +4,7 @@
 .Ruserdata
 .Rbuildignore
 data-raw/
+todo
+readme_cache/
+readme.html
+readme_files/
