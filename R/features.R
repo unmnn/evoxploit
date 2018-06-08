@@ -6,6 +6,7 @@
 #'
 #' @param df A data frame.
 #' @param li_clustering The output of \code{\link{clustering}}.
+#' @param label The class labels given as factor vector.
 #'
 #' @return A data frame with the following columns:
 #' \itemize{

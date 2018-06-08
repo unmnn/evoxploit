@@ -9,6 +9,8 @@ create_CBMS15_attributes(df = NULL, label = NULL, li_clustering = NULL)
 \arguments{
 \item{df}{A data frame.}
 
+\item{label}{The class labels given as factor vector.}
+
 \item{li_clustering}{The output of \code{\link{clustering}}.}
 }
 \value{

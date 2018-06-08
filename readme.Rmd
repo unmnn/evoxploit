@@ -5,6 +5,7 @@ output: github_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE
                       fig.path = "man/figures/README-")
 ```
 
@@ -19,8 +20,11 @@ a study participant's individual change over time, his/her change over time
 in comparison with the cluster he/she was closest to at the baseline 
 examinations, and the change of whole participant groups. 
 
-<sup>&ast;</sup> The functions of this package require a dataframe with the 
-following variables names semantics:
+<sup>&ast;</sup> The functions of this package require a n*m-dimensional 
+dataframe for the input variables and a factor vector of length n 
+with the target variable 
+(e.g. a medical outcome). The input data frame should have the following 
+variables names semantics:
 
 - Each variable name (e.g. `waist_circum_s0`) consists of a _stem_ and a _suffix_. 
 The stem is the substring until the last underscore `_` (`wairst_circum`). 
@@ -30,7 +34,7 @@ instance `s0` could represent the baseline examinations of a longitudinal
 study, `s1` the first follow-
 up examinations, `s2` the second follow up examinations and so on.
 - All variables must have a suffix. The suffix must start with "s" and end with 
-a number.
+a digit.
 
 ## Installation
 
@@ -44,7 +48,7 @@ devtools::install_github("unmnn/evoxploit")
 <!-- The example data `epi` is a list with two elements. `data` is a dataframe  -->
 <!-- containing 19 input features -->
 
-```{r, message=FALSE, warning = FALSE, cache=TRUE}
+```{r, message=FALSE, warning = FALSE}
 # Inspect example data
 library(evoxploit)
 str(epi)
@@ -70,7 +74,9 @@ str(df_cha)
 ```
 
 
-```{r, cache=TRUE, fig.height=8}
+```{r, fig.height=6.5}
+# Calculate Gain Ratio of both original and extracted features w.r.t. the 
+# target variable
 df_combined <- bind_cols(epi$data, df_evo, df_seq, df_cha, epi$label)
 gain_names <- FSelector::gain.ratio(label ~ ., data = df_combined)
 
@@ -78,7 +84,7 @@ gain_names %>%
   tibble::rownames_to_column("variable") %>%
   arrange(desc(attr_importance)) %>%
   mutate(variable = forcats::fct_reorder(variable, attr_importance)) %>%
-  slice(1:25) %>%
+  slice(1:20) %>%
   ggplot(aes(variable, attr_importance)) +
   geom_col() +
   coord_flip()
