@@ -311,7 +311,7 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
     # browser()
 
     # fraction of instances of class x in eps neighborhood ----
-    label_levels <- levels(label[[1]])
+    label_levels <- levels(label)
     minPts <- li_clustering[[i]]$clustering_result$minPts
     dist_matrix <- li_clustering[[i]]$dist %>% as.matrix()
 
@@ -320,7 +320,7 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
       1:nrow(ti_new_atts) %>%
       map(function(x) {
         idx_minPtsNN <- dist_matrix[x, ] %>% order() %>% .[1+(1:minPts)]
-        tab_labels <- label[[1]][idx_minPtsNN] %>% table()
+        tab_labels <- label[idx_minPtsNN] %>% table()
         tab_labels <- tab_labels / minPts
         tab_labels %>% as.numeric()
         # tibble(var_names = names(tab_labels),
