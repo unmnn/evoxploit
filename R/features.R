@@ -7,6 +7,8 @@
 #' @param df A data frame.
 #' @param li_clustering The output of \code{\link{clustering}}.
 #' @param label The class labels given as factor vector.
+#' @param suffix A string indicating the start of the wave index suffix.
+#' @param verbose Whether or not to show some diagnostic messages. Defaults to FALSE.
 #'
 #' @return A data frame with the following columns:
 #' \itemize{
@@ -81,27 +83,38 @@
 #'
 #' @export
 #'
-create_CBMS15_attributes <- function(df = NULL, label = NULL,
-                                     li_clustering = NULL) {
+#' @import dplyr
+#' @import purrr
+#' @import stringr
+#'
+create_CBMS15_attributes <- function(df, label, li_clustering,
+                                     suffix, verbose = FALSE, ...) {
 
-  if(is.null(df) | is.null(li_clustering)) {
-    stop("Both df and li_clustering have to be provided.")
+  debug <- FALSE
+
+  if(verbose) {
+    process_blocks_total <- 8
+    process_block <- 1
+    message("START calculating features from or inspired by CBMS15")
   }
+  if(debug) message("Debug mode ON")
 
-  process_blocks_total <- 8
-  process_block <- 1
+  # data_norm_global: Apply range transformation to each numeric attributes
+  data_norm_global <- range_trans(df)
 
-  # data_norm_global: Apply z-score normalization to all numeric attributes
-  data_norm_global <- df %>%
-    map_if(is.numeric, ~ (. - min(., na.rm = TRUE))/
-             (max(., na.rm = TRUE) - min(., na.rm = TRUE))) %>%
-    map_if(is.matrix, as.numeric) %>%
-    bind_cols()
-
+  # store all evo features in this data frame
   ti_new_atts <- NULL
 
-  unique_waves <- get_unique_waves(names(df))
+  # some helpers:
+  # int vector of wave indeces
+  unique_waves <- get_unique_waves(names(df), suffix = suffix)
+  # list of int vectors of pairs of wave indices
+  wave_pairs <- evo_permutations(unique_waves)
+  # char vector of attribute name stems that occur in at least min_wave_count waves
+  attribute_stem <- get_global_attname_stem(names(df), suffix = suffix,
+                                            min_wave_count = 2)
 
+  if(debug) browser()
 
   # ~Regression ----
   # 1. Filter all attributes that occur in at least 2 waves
@@ -113,73 +126,92 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
   # 2.b. For categorical attributes, check whether the majority of the
   # population changes its values and then calculate the agreement of the
   # instance's change.
-  attribute_stem <- get_global_attname_stem(names(df),
-                                            min_wave_count = 2)
 
   # Distance between waves ----
-  ti_new_atts %<>% bind_cols(
-    evo_permutations(names(data_norm_global)) %>%
+  ti_new_atts  <- ti_new_atts %>% bind_cols(
+    wave_pairs %>%
       map_dfc(function(x) {
         d <- 1:nrow(data_norm_global) %>%
           map_dbl(function(instance) {
-            # print(instance)
-            # if(instance == 77) browser()
-            # browser()
             i1 <- data_norm_global[instance,
                                    li_clustering[[x[1]+1]]$subset_att_wave]
             i2 <- data_norm_global[instance,
                                    li_clustering[[x[2]+1]]$subset_att_wave]
             names(i1) <- names(i2)
-            heom(bind_rows(i1,i2))[1,2]
+            calc_dist(bind_rows(i1,i2), trans = NULL)[1,2]
           })
         tibble(value = d) %>%
-          set_names(str_c("dist_s_", x[1], "_", x[2]))
+          set_names(paste0("dist", suffix, x[1], "_", x[2]))
       })
   )
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
-  ti_new_atts %<>% bind_cols(
+  ti_new_atts  <- ti_new_atts %>% bind_cols(
     attribute_stem %>%
       map_dfc(function(att){
-        data_sub <- df %>% select(matches(str_c("^", att, "_s\\d$")))
-        att_order <- str_replace(names(data_sub), ".*_s(\\d)$", "\\1") %>%
+        data_sub <- df %>% select(matches(paste0("^", att, suffix, "\\d+$")))
+        att_order <- str_replace(names(data_sub), paste0(".*", suffix, "(\\d+)$"), "\\1") %>%
           as.integer() %>% order()
         data_sub <- data_sub[,att_order]
 
-        evo_permutations(att_order) %>%
-          map2_dfc(evo_permutations(names(data_sub)), function(ao, att_perm){
-            if(is.numeric(data_sub[[1]])) {
-              data_sub[, ao] %>%
-                set_names(c("att_1", "att_2")) %>%
-                mutate(slope = att_2 - att_1) %>%
-                transmute(dev_from_slope = slope - mean(slope, na.rm = TRUE)) %>%
-                set_names(str_c("dev_from_pop_", att, "_s_",
-                                att_perm[1], "_", att_perm[2]))
-            } else {
-              data_sub[, ao] %>%
-                set_names(c("att_1", "att_2")) %>%
-                mutate(has_changed = !att_2 == att_1) %>%
-                mutate(pop_has_changed = ifelse(mean(has_changed, na.rm = TRUE)
-                                                >= .5, TRUE, FALSE)) %>%
-                transmute(dev_from_pop = ifelse(! has_changed == pop_has_changed,
-                                                TRUE, FALSE)) %>%
-                set_names(str_c("dev_from_pop_", att, "_s_",
-                                att_perm[1], "_", att_perm[2]))
-            }
+        # print(att)
+        # browser()
+        map_dfc(evo_permutations(get_unique_waves(names(data_sub), suffix)),
+            function(ao) {
+              if(is.numeric(data_sub[[1]])) {
+                data_sub[paste0(att, suffix, ao)] %>%
+                  set_names(c("att_1", "att_2")) %>%
+                  mutate(slope = att_2 - att_1) %>%
+                  transmute(dev_from_slope = slope - mean(slope, na.rm = TRUE)) %>%
+                  set_names(paste0("dev_from_pop_", att, suffix,
+                                   ao[1], "_", ao[2]))
+              } else {
+                data_sub[paste0(att, suffix, ao)] %>%
+                  set_names(c("att_1", "att_2")) %>%
+                  mutate(has_changed = !att_2 == att_1) %>%
+                  mutate(pop_has_changed = ifelse(mean(has_changed, na.rm = TRUE)
+                                                  >= .5, TRUE, FALSE)) %>%
+                  transmute(dev_from_pop = ifelse(! has_changed == pop_has_changed,
+                                                  TRUE, FALSE)) %>%
+                  set_names(paste0("dev_from_pop_", att, suffix,
+                                   ao[1], "_", ao[2]))
+              }
+            })
 
-          })
+        # evo_permutations(att_order) %>%
+        #   map2_dfc(evo_permutations(att_order), function(ao, att_perm){
+        #     if(is.numeric(data_sub[[1]])) {
+        #       data_sub[, ao] %>%
+        #         set_names(c("att_1", "att_2")) %>%
+        #         mutate(slope = att_2 - att_1) %>%
+        #         transmute(dev_from_slope = slope - mean(slope, na.rm = TRUE)) %>%
+        #         set_names(paste0("dev_from_pop_", att, suffix,
+        #                          att_perm[1], "_", att_perm[2]))
+        #     } else {
+        #       data_sub[, ao] %>%
+        #         set_names(c("att_1", "att_2")) %>%
+        #         mutate(has_changed = !att_2 == att_1) %>%
+        #         mutate(pop_has_changed = ifelse(mean(has_changed, na.rm = TRUE)
+        #                                         >= .5, TRUE, FALSE)) %>%
+        #         transmute(dev_from_pop = ifelse(! has_changed == pop_has_changed,
+        #                                         TRUE, FALSE)) %>%
+        #         set_names(paste0("dev_from_pop_", att, suffix,
+        #                          att_perm[1], "_", att_perm[2]))
+        #     }
+        #
+        #   })
       })
   )
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
   ### ~Features linked to one wave -----
   # Cluster idx ----
-  ti_new_atts %<>% bind_cols(
+  ti_new_atts  <- ti_new_atts %>% bind_cols(
     map_dfc(1:length(unique_waves), function(x) {
       li_clustering[[x]]$clustering_result$cluster %>% as.factor() %>%
         as_tibble() %>%
@@ -187,13 +219,15 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
     }
     )
   )
+  if(debug) browser()
+
 
   for(i in 1:length(li_clustering)) {
     # LOF ----
     lof_score <- dbscan::lof(li_clustering[[i]]$dist,
                              k = li_clustering[[i]]$clustering_result$minPts)
 
-    ti_new_atts %<>% bind_cols(tibble(dummy = lof_score))
+    ti_new_atts  <- ti_new_atts %>% bind_cols(tibble(dummy = lof_score))
     names(ti_new_atts)[length(names(ti_new_atts))] <- str_c("lof_s",
                                                             unique_waves[i])
 
@@ -210,7 +244,7 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
     # Cluster representative ----
     # Graph distance to representative ----
     # Graph path length to representative ----
-    ti_new_atts %<>% mutate(cluster_rep = FALSE,
+    ti_new_atts  <- ti_new_atts %>% mutate(cluster_rep = FALSE,
                             dist_to_rep = NA,
                             path_length_to_rep = NA)
 
@@ -243,26 +277,26 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
               sum()
           }
         })
-      ti_new_atts %<>% mutate(dist_to_rep = ifelse(is.infinite(dist_to_rep),
+      ti_new_atts  <- ti_new_atts %>% mutate(dist_to_rep = ifelse(is.infinite(dist_to_rep),
                                                    NA, dist_to_rep))
 
       ti_new_atts$path_length_to_rep[idx_cluster] <-
         map_int(pa, ~if(all(is.na(.))){NA}else{length(.)})
-      ti_new_atts %<>% mutate(path_length_to_rep =
+      ti_new_atts  <- ti_new_atts %>% mutate(path_length_to_rep =
                                 ifelse(is.infinite(dist_to_rep),
                                        NA, path_length_to_rep))
     }
     names(ti_new_atts)[which(names(ti_new_atts) == "cluster_rep")] <-
-      str_c("cluster_rep_s", unique_waves[i])
+      paste0("cluster_rep", suffix, unique_waves[i])
     names(ti_new_atts)[which(names(ti_new_atts) == "dist_to_rep")] <-
-      str_c("dist_to_rep_s", unique_waves[i])
+      paste0("dist_to_rep", suffix, unique_waves[i])
     names(ti_new_atts)[which(names(ti_new_atts) == "path_length_to_rep")] <-
-      str_c("path_length_to_rep_s", unique_waves[i])
+      paste0("path_length_to_rep", suffix, unique_waves[i])
+    if(debug) browser()
 
     # Cluster centroid ----
     # Distance to centroid ----
-    ti_new_atts %<>% mutate(dist_to_centroid = NA)
-
+    ti_new_atts  <- ti_new_atts %>% mutate(dist_to_centroid = NA)
 
     data_norm <- data_norm_global %>%
       select(li_clustering[[i]]$subset_att_wave)
@@ -281,15 +315,14 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
         bind_cols()
 
       ti_new_atts$dist_to_centroid[idx_cluster] <-
-        heom(bind_rows(centroid, data_norm[idx_cluster, ]))[1,-1]
+        calc_dist(bind_rows(centroid, data_norm[idx_cluster, ]), trans = NULL)[1,-1]
     }
     names(ti_new_atts)[which(names(ti_new_atts) == "dist_to_centroid")] <-
-      str_c("dist_to_centroid_s", unique_waves[i])
+      paste0("dist_to_centroid", suffix, unique_waves[i])
 
     # Cluster medoid ----
     # Distance to medoid ----
-    # browser()
-    ti_new_atts %<>% mutate(dist_to_medoid = NA)
+    ti_new_atts  <- ti_new_atts %>% mutate(dist_to_medoid = NA)
     for(ci in 1:length(unique_clusters)) {
       idx_cluster <- which(cluster_assignment == unique_clusters[ci])
 
@@ -307,15 +340,14 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
         as.double()
     }
     names(ti_new_atts)[which(names(ti_new_atts) == "dist_to_medoid")] <-
-      str_c("dist_to_medoid_s", unique_waves[i])
-    # browser()
+      paste0("dist_to_medoid", suffix, unique_waves[i])
+    if(debug) browser()
 
     # fraction of instances of class x in eps neighborhood ----
     label_levels <- levels(label)
     minPts <- li_clustering[[i]]$clustering_result$minPts
     dist_matrix <- li_clustering[[i]]$dist %>% as.matrix()
 
-    # browser()
     temp <-
       1:nrow(ti_new_atts) %>%
       map(function(x) {
@@ -328,12 +360,12 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
         #   spread(var_names, values)
       })
 
-    ti_new_atts %<>%
+    ti_new_atts  <- ti_new_atts %>%
       bind_cols(
         matrix(unlist(temp), ncol = length(label_levels), byrow = TRUE) %>%
           as_tibble() %>%
           set_names(str_c("frac_class_", label_levels,
-                          "_in_neighborhood_s", unique_waves[i]))
+                          "_in_neighborhood", suffix, unique_waves[i]))
 
       )
 
@@ -342,24 +374,25 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
       cluster::silhouette(x = li_clustering[[i]]$clustering_result$cluster,
                           dist = li_clustering[[i]]$dist)[ ,3]
     names(ti_new_atts)[which(names(ti_new_atts) == "silhouette")] <-
-      str_c("silhouette_s", unique_waves[i])
+      str_c("silhouette", suffix, unique_waves[i])
 
   }
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
   # ~Evolution Features ----
   # Attribute changes ----
-  ti_new_atts %<>%
+  ti_new_atts  <- ti_new_atts %>%
     bind_cols(
-      evo_permutations(names(df)) %>%
+      wave_pairs %>%
         map(function(p) {
           get_global_attname_stem(names(df),
                                   min_wave_count = length(unique_waves)) %>%
             map(function(x) {
-              df <- df[str_c(x, "_s", c(p[1],p[2]))]
+              # browser()
+              df <- df[str_c(x, suffix, c(p[1], p[2]))]
 
               if(is.numeric(df[[1]])) {
                 real_diff <- df[,2] - df[,1]
@@ -368,14 +401,14 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
                 return(
                   bind_cols(real_diff, abs_diff, rel_diff) %>%
                     set_names(str_c(c("real_diff", "abs_diff", "rel_diff"),
-                                    "_att_", x, "_s_", p[1], "_", p[2]))
+                                    "_att_", x, suffix, p[1], "_", p[2]))
                 )
               } else {
                 has_changed <- (df[,1] != df[,2]) %>% as.logical()
                 return(
                   tibble(has_changed) %>%
                     set_names(str_c("has_changed", "_att_", x,
-                                    "_s_", p[1], "_", p[2]))
+                                    suffix, p[1], "_", p[2]))
                 )
               }
             }) %>%
@@ -383,14 +416,14 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
         }) %>% bind_cols()
     )
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
   # Outlierness change ----
-  ti_new_atts %<>%
+  ti_new_atts  <- ti_new_atts %>%
     bind_cols(
-      evo_permutations(names(df)) %>%
+      wave_pairs %>%
         map(function(x) {
           bind_cols(
             c1 = li_clustering[[x[1]+1]]$clustering_result$cluster,
@@ -401,19 +434,19 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
             mutate(no_outlier = ifelse(c1 == 1 & c2 == 1, TRUE, FALSE)) %>%
             select(-c(c1,c2)) %>%
             set_names(str_c(c("stays_outlier", "becomes_outlier",
-                              "was_outlier", "never_outlier"), "_s_",
+                              "was_outlier", "never_outlier"), suffix,
                             x[1], "_", x[2]))
         }) %>% bind_cols()
     )
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
   # Cluster peer change ----
-  ti_new_atts %<>%
+  ti_new_atts  <- ti_new_atts %>%
     bind_cols(
-      evo_permutations(names(df)) %>%
+      wave_pairs %>%
         map(function(x) {
           c1 = li_clustering[[x[1]+1]]$clustering_result$cluster
           c2 = li_clustering[[x[2]+1]]$clustering_result$cluster
@@ -429,21 +462,20 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
               return(intersection_peers)
             }) %>%
             as_tibble() %>%
-            set_names(str_c("frac_same_peers_s_", x[1], "_", x[2]))
+            set_names(str_c("frac_same_peers", suffix, x[1], "_", x[2]))
         }) %>% bind_cols()
     )
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
-
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
 
 
   # minPts nearest neighbor change ----
-  ti_new_atts %<>%
+  ti_new_atts  <- ti_new_atts %>%
     bind_cols(
-      evo_permutations(names(df)) %>%
+      wave_pairs %>%
         map(function(x) {
           c1 = li_clustering[[x[1]+1]]$clustering_result$cluster
           c2 = li_clustering[[x[2]+1]]$clustering_result$cluster
@@ -463,63 +495,66 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
               return(intersection_minPts_nn)
             }) %>%
             as_tibble() %>%
-            set_names(str_c("same_minPts_nn_s_", x[1], "_", x[2]))
+            set_names(str_c("same_minPts_nn", suffix, x[1], "_", x[2]))
         }) %>% bind_cols()
     )
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
 
   # Silhouette and LOF change ----
   clm <- names(ti_new_atts)[str_detect(names(ti_new_atts), "(silhouette|lof)")]
   stem <- str_replace(clm, "^(.*)_s\\d$", "\\1") %>% unique()
 
-  ti_new_atts %<>%
+  ti_new_atts  <- ti_new_atts %>%
     bind_cols(
       stem %>%
         map_dfc(function(s){
-          evo_permutations(names(df)) %>%
+          wave_pairs %>%
             map_dfc(function(x) {
-              df <- ti_new_atts[, str_c(s, "_s", x)]
+              df <- ti_new_atts[, str_c(s, suffix, x)]
               tibble(value = (df[, 2] - df[, 1])[[1]] ) %>%
-                set_names(str_c("real_diff_", s, "_s_", x[1], "_", x[2]))
+                set_names(str_c("real_diff_", s, suffix, x[1], "_", x[2]))
             })
         })
     )
 
-  print(str_c("Create CBMS'15 Attributes: ",
-              round(process_block/process_blocks_total*100), "% completed."))
-  process_block <- process_block + 1
-
+  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+  if(verbose) process_block <- process_block + 1
+  if(debug) browser()
 
   # Overall change of a participant ----
-  ti_new_atts %<>%
+  ti_new_atts  <- ti_new_atts %>%
     bind_cols(
-      evo_permutations(names(df)) %>%
+      wave_pairs %>%
         map_dfc(function(x) {
           s1 <- li_clustering[[x[1]+1]]$subset_att_wave
           s2 <- li_clustering[[x[2]+1]]$subset_att_wave
           res <- 1:nrow(data_norm_global) %>%
             map_dbl(function(inst){
-              heom(
+              calc_dist(
                 bind_rows(data_norm_global[inst, s1],
                           data_norm_global[inst, s2] %>%
-                            set_names(s1))
+                            set_names(s1)), trans = NULL, ...
               )[1,2]
             })
 
-          tibble(value = res) %>% set_names(str_c("diff_s_", x[1], "_", x[2]))
+          tibble(value = res) %>% set_names(str_c("diff", suffix, x[1], "_", x[2]))
         }
         ))
+  if(debug) browser()
 
   # Clean
-  ti_new_atts %<>% map_if(is.logical,
+  # Convert logical features to dichotomous factors
+  ti_new_atts  <- ti_new_atts %>% map_if(is.logical,
                           function(x) {
                             x %>% as.integer() %>% as.factor()
                           }) %>% bind_cols()
 
   ti_new_atts <- replace_nan_inf_with_na(ti_new_atts)
+  if(debug) browser()
+
+  if(verbose) message(paste0("FINISHED calculating CBMS15 features."))
 
   return(ti_new_atts)
 }
@@ -530,14 +565,17 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
 #' \insertCite{Hielscher:IDA14}{evoxploit}.
 #'
 #' @param df A data frame.
+#' @param label The class labels given as factor vector.
+#' @param suffix A string indicating the start of the wave index suffix.
 #' @param train_lgc A logical vector. \code{TRUE} elements represent training
 #' instances of \code{df}. If not set, all instances of \code{df} are
 #' treated as training instances.
-#' @param label The class labels given as factor vector.
 #' @param kdist_sample_size The number of randomly sampled \eqn{epsilon} values
 #' drawn from \code{dist_to_line} used as candidates for clustering. Weighted
 #' random sampling is used: the larger \code{dist_to_line}, the higher the
 #' probability of being drawn.
+#' @param seed Random seed. Used to draw a random sample from the k-distances.
+#' @param verbose Whether or not to show some diagnostic messages. Defaults to FALSE.
 #'
 #'
 #' @return A data frame. For each attribute \strong{a}, the data
@@ -550,32 +588,39 @@ create_CBMS15_attributes <- function(df = NULL, label = NULL,
 #'
 #' @export
 #'
-create_IDA14_attributes <- function(df, train_lgc = rep(TRUE, nrow(df)),
-                                    label, kdist_sample_size = 50) {
-  df <- df %>%
-    map_if(is.numeric, ~ (. - min(., na.rm = TRUE))/
-             (max(., na.rm = TRUE) - min(., na.rm = TRUE))) %>%
-    map_if(is.matrix, as.numeric) %>%
-    bind_cols()
+#' @import dplyr
+#' @import purrr
+#' @import stringr
+#'
+create_IDA14_attributes <- function(df, label, suffix,
+                                    train_lgc = rep(TRUE, nrow(df)),
+                                    kdist_sample_size = 50,
+                                    seed = 123,
+                                    verbose = FALSE) {
+
+  if(verbose) message(paste0("START calculating IDA14 features."))
+
+  df <- range_trans(df)
 
   # Get name stems of attributes that occur in at least 2 waves
-  attribute_stem <- get_global_attname_stem(names(df), min_wave_count = 2)
+  attribute_stem <- get_global_attname_stem(names(df), min_wave_count = 2,
+                                            suffix = suffix)
 
   # Create seq feature for each global attribute
   # attribute_stem
   # c("stea", "stea_alt75") %>%
   df_seq <- attribute_stem %>%
     map_dfc(function(att) {
-      print(att)
-      dist_obj <- df %>% select(matches(str_c("^", att, "_s\\d$"))) %>%
-        heom() %>% as.dist()
+      # print(att)
+      dist_obj <- df %>% select(matches(str_c("^", att, suffix, "\\d+$"))) %>%
+        calc_dist(trans = NULL) %>% as.dist()
       kdist <- kdist_info(dist_obj)
       # Randomly sample `kdist_sample_size` epsilons using dist_to_line as
       # probability weights. The higher dist_to_line, i.e. the closer to the
       # knee point, the higher the probability of being drawn.
 
       if(any(kdist$dist_to_line > 0)) {
-        set.seed(123)
+        set.seed(seed)
         s <- sample(1:length(kdist$knn_dist_sorted), size = kdist_sample_size,
                     prob = kdist$dist_to_line)
 
@@ -601,29 +646,37 @@ create_IDA14_attributes <- function(df, train_lgc = rep(TRUE, nrow(df)),
 
         # Select index with highest gain ratio and re-cluster with the
         # respective eps value
-        if(max(df_s$gain_ratio) > 0) {
+        max_gain_ratio <- max(df_s$gain_ratio)
+        if(verbose) message(paste0("Max. gain ratio of sequence feature derived from ", att, " = ", max_gain_ratio, "."))
+        if(verbose & max_gain_ratio == 0) message(paste0("Drop ", att, " since gain ratio == 0."))
+        if(max_gain_ratio > 0) {
           s_opt <- arrange(df_s, desc(gain_ratio)) %>% pull(s) %>% .[1]
-          print(max(df_s$gain_ratio))
+          # print(max_gain_ratio)
           clustering_result <- dbscan::dbscan(dist_obj,
                                               eps = kdist$knn_dist_sorted[s_opt],
                                               minPts = kdist$minPts)
           cluster_assignment <- clustering_result$cluster %>% as.factor()
 
           tibble(value = cluster_assignment) %>%
-            set_names(str_c(att, "_seq")) %>% return()
+            set_names(paste0("seq_", att)) %>% return()
         } else {return(NULL)}
       } else {return(NULL)}
     })
   df_seq <- replace_nan_inf_with_na(df_seq)
+
+  if(verbose) message(paste0("FINISHED calculating IDA14 features."))
+
   return(df_seq)
 }
 
-#' Generate Simple Temporal Attributes
+#' Generate Descriptive Temporal Attributes
 #'
-#' Generates simple temporal attributes, e.g. the mean and mode of an attribute
+#' Generates descriptive temporal attributes, e.g. the mean and mode of an attribute
 #' over all waves.
 #'
 #' @param df A data frame.
+#' @param suffix A string indicating the start of the wave index suffix.
+#' @param verbose Whether or not to show some diagnostic messages. Defaults to FALSE.
 #'
 #' @return A data frame with the following columns for each attribute \strong{a}
 #' in \code{df}:
@@ -646,15 +699,21 @@ create_IDA14_attributes <- function(df, train_lgc = rep(TRUE, nrow(df)),
 #'
 #' @export
 #'
-create_simple_attributes <- function(df) {
-  attribute_stem <- get_global_attname_stem(names(df))
+#' @import dplyr
+#' @import purrr
+#' @import stringr
+#'
+create_desc_attributes <- function(df, suffix, verbose = FALSE) {
+  if(verbose) message(paste0("START calculating 'descriptive' evolution features."))
+
+  attribute_stem <- get_global_attname_stem(names(df), suffix = suffix)
 
   df_new <- attribute_stem %>%
     map_dfc(function(att){
       data_sub <- df %>%
-        select(matches(str_c("^", att, "_s\\d$"))) %>%
+        select(matches(str_c("^", att, suffix, "\\d+$"))) %>%
         mutate(r = row_number()) %>%
-        gather(key, value, -r) %>%
+        tidyr::gather(key, value, -r) %>%
         group_by(r)
 
       if(is.factor(df[[data_sub$key[1]]])) {
@@ -682,12 +741,14 @@ create_simple_attributes <- function(df) {
                           summarize(att_mode = getmode(value)) %>%
                           select(-r))
       }
-      names(df) <- str_c(att, "_desc_",
+      names(df) <- str_c("desc_", att, "_",
                          str_replace(names(df), "^att_(.*)$", "\\1"))
       return(df)
     })
 
   df_new <- replace_nan_inf_with_na(df_new)
+
+  if(verbose) message(paste0("FINISHED calculating 'descriptive' evolution features."))
 
   return(df_new)
 }

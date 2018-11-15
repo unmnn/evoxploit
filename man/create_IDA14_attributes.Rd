@@ -4,22 +4,28 @@
 \alias{create_IDA14_attributes}
 \title{Generate IDA'14 Attributes}
 \usage{
-create_IDA14_attributes(df, train_lgc = rep(TRUE, nrow(df)), label,
-  kdist_sample_size = 50)
+create_IDA14_attributes(df, label, suffix, train_lgc = rep(TRUE,
+  nrow(df)), kdist_sample_size = 50, seed = 123, verbose = FALSE)
 }
 \arguments{
 \item{df}{A data frame.}
+
+\item{label}{The class labels given as factor vector.}
+
+\item{suffix}{A string indicating the start of the wave index suffix.}
 
 \item{train_lgc}{A logical vector. \code{TRUE} elements represent training
 instances of \code{df}. If not set, all instances of \code{df} are
 treated as training instances.}
 
-\item{label}{The class labels given as factor vector.}
-
 \item{kdist_sample_size}{The number of randomly sampled \eqn{epsilon} values
 drawn from \code{dist_to_line} used as candidates for clustering. Weighted
 random sampling is used: the larger \code{dist_to_line}, the higher the
 probability of being drawn.}
+
+\item{seed}{Random seed. Used to draw a random sample from the k-distances.}
+
+\item{verbose}{Whether or not to show some diagnostic messages. Defaults to FALSE.}
 }
 \value{
 A data frame. For each attribute \strong{a}, the data

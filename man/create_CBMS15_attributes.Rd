@@ -4,7 +4,8 @@
 \alias{create_CBMS15_attributes}
 \title{Generate CBMS'15+ Attributes}
 \usage{
-create_CBMS15_attributes(df = NULL, label = NULL, li_clustering = NULL)
+create_CBMS15_attributes(df, label, li_clustering, suffix,
+  verbose = FALSE, ...)
 }
 \arguments{
 \item{df}{A data frame.}
@@ -12,6 +13,10 @@ create_CBMS15_attributes(df = NULL, label = NULL, li_clustering = NULL)
 \item{label}{The class labels given as factor vector.}
 
 \item{li_clustering}{The output of \code{\link{clustering}}.}
+
+\item{suffix}{A string indicating the start of the wave index suffix.}
+
+\item{verbose}{Whether or not to show some diagnostic messages. Defaults to FALSE.}
 }
 \value{
 A data frame with the following columns:

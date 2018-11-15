@@ -34,101 +34,14 @@ replace_na_nan_inf_vec <- function(x, v = 0) {
 #'
 #' @return The modified data frame.
 #'
+#' @import purrr
+#'
 replace_nan_inf_with_na <- function(df) {
   map_dfc(df, function(x) {
     x[is.nan(x)|is.infinite(x)] <- NA
     return(x)
   })
 }
-
-#' An implementation of the HEOM metric.
-#'
-#' This creates distance matrix from given data.
-#'
-#' Please note that the function doesn't scale the variables.
-#'
-#' TODO: This breaks, if the data has only one column. Also, check if the sapply-
-#' way to check numerics and factors is correct, since if there's only one column,
-#' it returns logical vector for all cases, not for the column.
-#'
-#' For further reading, see \insertCite{Wilson:HEOM1997}{evoxploit}.
-#'
-#' Adapted from https://github.com/Tommytronic/Scatter-R/blob/master/R/heom.R.
-#'
-#' @param data The data frame to calculate the distance matrix from.
-#' @return A distance matrix.
-#'
-#' @references \insertAllCited{}
-#'
-#' @export
-heom <- function(data) {
-
-  if(!is.data.frame(data)) data <- as.data.frame(data)
-
-  # Index of factor columns
-  factors <- which(map_lgl(data, is.factor))
-
-  # Index of numerical columns
-  numerics <- which(map_lgl(data, is.numeric))
-
-  # Calculate the ranges of numeric variables; it's needed to calculate the distance
-  # for numeric variables.
-  # ranges <- map_dbl(data[numerics], max, na.rm = TRUE) - map_dbl(data[numerics], min, na.rm = TRUE)
-
-  # Convert to numeric whole data
-  # TODO: Why?
-  data <- map_dfc(data, as.numeric) %>% as.matrix()
-
-  #Distance matrix is an n by n matrix, where n is the number of rows in the data.
-  dlen <- nrow(data)
-  result <- matrix(nrow = nrow(data), ncol = nrow(data))
-  row <- vector(mode = "numeric", length = ncol(data))
-
-  # Two loops to calculate the distance between both
-  for (i in 1:dlen) {
-    for (j in 1:dlen) {
-
-      # This is used to skip about half of the calculations, since the
-      # distance between case x and y is same as between y and x.
-      if(!is.na(result[i, j]))
-        next
-
-      # For factor attributes, the distance is 1, if they're equal, 0 if
-      # not. What is inside the parentheses does this: if those factor-
-      # columns are same, it results in 1 and if they're not same, the
-      # result is zero (0). But since it must be just other way around,
-      # we use exclamation mark to invert the result: the distance is
-      # zero if they're same and one if they're not same.
-      if(length(factors) > 0) {
-        tryCatch(
-          row[factors] <- as.double(!(data[i, factors] == data[j, factors])),
-          error = function(e) browser()
-        )
-      }
-
-      # For numeric type, distance is xi - yi / range. The code is just
-      # elementwise calculations.
-      if(length(numerics) > 0) {
-        # row[numerics] <- ((data[i, numerics] - data[j, numerics]) / ranges) %>% as.double()
-        row[numerics] <- as.double(data[i, numerics] - data[j, numerics])
-      }
-
-      # For NA, distance is 1
-      row[is.na(row)] <- 1
-
-      # Finally square the result and sum it
-      ssum <- sum(row^2)
-      result[i, j] <- ssum
-      result[j, i] <- ssum
-    }
-  }
-
-  # Since sqrt isn't really fast operation, this is done for all rows at once
-  # just before returning the result.
-  return(sqrt(result))
-}
-
-
 
 #' Extract (unique) stems from attribute names
 #'
@@ -139,22 +52,22 @@ heom <- function(data) {
 #' @param min_wave_count The minimum number of waves an attribute must be present
 #' in for its name stem to be returned. If not set, the parameter defaults to
 #' the total number of waves.
+#' @param suffix A string indicating the start of the wave index suffix.
 #'
 #' @return A character vector of attribute name stems.
+#'
+#' @import stringr
+#' @import dplyr
+#'
 #' @export
 #'
-get_global_attname_stem <- function(att_names, min_wave_count = NULL) {
-  if(is.null(min_wave_count)) {
-    # Why is suppressWarnings() used here?
-    suppressWarnings({
-      min_wave_count <- str_replace(att_names, "^.*_s(\\d)$", "\\1") %>%
-        as.integer() %>% unique() %>% length()
-    })
-  }
+get_global_attname_stem <- function(att_names,
+                                    min_wave_count = length(get_unique_waves(att_names, suffix)),
+                                    suffix = "_s") {
 
-  num_suffix <- get_unique_waves(att_names)
+  unique_wave_idx <- get_unique_waves(att_names, suffix)
 
-  attribute_stem <- str_replace(att_names, "^(.*)_s.$", "\\1") %>%
+  attribute_stem <- str_replace(att_names, paste0("^(.*)", suffix, "\\d+"), "\\1") %>%
     as_tibble() %>%
     count(value) %>%
     filter(n >= min_wave_count) %>%
@@ -163,25 +76,56 @@ get_global_attname_stem <- function(att_names, min_wave_count = NULL) {
   return(attribute_stem)
 }
 
-#' Extract unique wave suffixes
+#' Extract unique wave numbers
 #'
-#' Extracts unique wave suffixes (e.g. 0 for "som_bmi_s0") from a vector of
+#' Extracts unique wave numbers (e.g. 0 for "som_bmi_s0") from a vector of
 #' attribute names.
 #'
 #' @param att_names A character vector of attribute names.
+#' @param suffix A string indicating the start of the wave index suffix.
 #'
 #' @return An integer vector of (sorted) wave numbers.
+#'
+#' @import stringr
+#'
 #' @export
 #'
-get_unique_waves <- function(att_names) {
-  num_suffix <-
-    suppressWarnings(
-      str_replace(att_names, "^.*_s(\\d)$", "\\1") %>%
-        as.integer()
-    ) %>%
-    na.omit() %>%
-    unique() %>%
-    sort()
+get_unique_waves <- function(att_names, suffix = "_s") {
+  wave_idx <- as.integer(str_replace(att_names, paste0("^.*", suffix, "(\\d+)"), "\\1"))
+  checkmate::assert_integer(wave_idx, any.missing = FALSE)
 
-  return(num_suffix)
+  unique_wave_idx <- sort(unique(wave_idx))
+  checkmate::assert_true(all(diff(unique_wave_idx) > 0))
+
+  return(unique_wave_idx)
+}
+
+#' Find pairwise permutations of attribute names
+#'
+#' Find all possible pairwise wave permuations of attribute names, e.g.
+#' {(som_bmi_s0, som_bmi_s1), (som_bmi_s0, som_bmi_s2),
+#' (som_bmi_s1, som_bmi_s2)}. Autmatically extracts the set of wave suffixes.
+#'
+#' @param int_waves An integer vector of wave indices.
+#'
+#' @return A list of pairs of wave indices
+#'
+#' @export
+#'
+# evo_permutations <- function(df_names, suffix = "_s") {
+#   unique_waves <- get_unique_waves(df_names, suffix = suffix)
+#
+#   perm <- list()
+#
+#   for(i in unique_waves) {
+#     for(j in unique_waves[-1]) {
+#       if(i < j) perm[[length(perm) + 1]] <- c(i,j)
+#     }
+#   }
+#
+#   return(perm)
+# }
+evo_permutations <- function(int_waves) {
+  perm <- combn(sort(int_waves), 2)
+  return(split(perm, rep(1:ncol(perm), each = nrow(perm))))
 }

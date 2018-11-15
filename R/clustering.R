@@ -39,48 +39,36 @@
 #' @references \insertAllCited{}
 #'
 #' @export
-clustering <- function(df, label, minPts = NULL, eps = NULL) {
-  best_attributes_stem <- best_att_subset_global(df, label)
-  unique_waves <- get_unique_waves(names(df))
+clustering <- function(df, label, minPts = NULL, eps = NULL, suffix = "_s", ...) {
 
-  li_clustering_result <- unique_waves %>%
-    map(function(wave_idx) {
-      subset_att_wave <- str_c(best_attributes_stem, "_s", wave_idx)
+  best_attributes_stem <- best_att_subset_global(df, label, suffix = suffix)
+  unique_waves <- get_unique_waves(names(df), suffix = suffix)
 
-      # Calculate Distance Matrix
-      dist <- df %>%
-        select(subset_att_wave) %>%
-        # map_if(is.numeric, scale) %>% # z-score normalisation
-        map_if(is.numeric, ~ (. - min(., na.rm = TRUE))/
-                 (max(., na.rm = TRUE) - min(., na.rm = TRUE))) %>%
-        map_if(is.matrix, as.numeric) %>%
-        bind_cols() %>%
-        heom() %>%
-        as.dist()
+  li_clustering_result <- vector("list", length(unique_waves))
 
-      # Get k-dist info to extract appropriate eps
-      if(is.null(minPts) & is.null(eps))
-        li_kdist <- kdist_info(dist)
-      if(!is.null(minPts) & is.null(eps))
-        li_kdist <- kdist_info(dist, k = minPts)
-      if(is.null(minPts) & !is.null(eps))
-        li_kdist <- kdist_info(dist) #unrealistic case
-      if(!is.null(minPts) & !is.null(eps))
-        li_kdist <- list(minPts = minPts, eps_opt = eps)
+  for(wave_idx in seq_along(li_clustering_result)) {
+    # Subset of names of attributes to cluster on
+    subset_att_wave <- paste0(best_attributes_stem, suffix, unique_waves[wave_idx])
 
-      # CLUSTERING
-      # c(10, 50, 100, 200) %>%
-      #   map(~dbscan(dist, eps = kdist_info(dist, k = .)$eps_opt, minPts = .))
-      li_clustering_result <- dbscan::dbscan(dist, eps = li_kdist$eps_opt,
-                                             minPts = li_kdist$minPts)
+    # Calculate Distance Matrix
+    dist <- df %>%
+      select(subset_att_wave) %>%
+      calc_dist(...) %>%
+      as.dist()
 
-      return(list(
-        dist = dist,
-        subset_att_wave = subset_att_wave,
-        kdist = li_kdist,
-        clustering_result = li_clustering_result
-      ))
-    })
+    # Get k-dist info to extract appropriate eps
+    if(is.null(minPts) & is.null(eps)) li_kdist <- kdist_info(dist)
+    if(!is.null(minPts) & is.null(eps)) li_kdist <- kdist_info(dist, k = minPts)
+    if(is.null(minPts) & !is.null(eps)) li_kdist <- kdist_info(dist) #unrealistic case
+    if(!is.null(minPts) & !is.null(eps)) li_kdist <- list(minPts = minPts, eps_opt = eps)
+
+    clustering <- dbscan::dbscan(dist, eps = li_kdist$eps_opt,
+                                           minPts = li_kdist$minPts)
+
+    li_clustering_result[[wave_idx]] <-
+      list(dist = dist, subset_att_wave = subset_att_wave, kdist = li_kdist,
+           clustering_result = clustering)
+  }
 
   return(li_clustering_result)
 }
@@ -91,23 +79,25 @@ clustering <- function(df, label, minPts = NULL, eps = NULL) {
 #' returns a vector of (unique) attribute name stems.
 #'
 #' @param df A data frame (without class).
-#' @param label - The class labels given as factor vector.
+#' @param label The class labels given as factor vector.
+#' @param suffix A string indicating the start of the wave index suffix.
 #'
 #' @return A character vector of unique attribute name stems.
 #' @export
 #'
-best_att_subset_global <- function(df, label) {
+best_att_subset_global <- function(df, label, suffix) {
   df_names <- names(df)
 
   # Get stems of global attribute names
-  attribute_stem <- get_global_attname_stem(df_names)
+  # should min_wave_count be an argument to this function?
+  attribute_stem <- get_global_attname_stem(df_names, suffix = suffix)
 
   # Get waves
-  num_suffix <- get_unique_waves(df_names)
+  num_suffix <- get_unique_waves(df_names, suffix = suffix)
 
   # expand attribute names with all possible suffixes
   attribute_subset <- str_c(rep(attribute_stem, length(num_suffix)),
-                            "_s",
+                            suffix,
                             rep(num_suffix, each = length(attribute_stem)))
 
   # select these attributes + label
@@ -119,7 +109,7 @@ best_att_subset_global <- function(df, label) {
   cfs_result <- FSelector::cfs(label ~ ., df_cfs)
 
   # return unique attribute stems
-  return(cfs_result %>% str_replace("^(.*)_s\\d$", "\\1") %>% unique())
+  return(cfs_result %>% str_replace(paste0("^(.*)", suffix, "\\d+$"), "\\1") %>% unique())
 }
 
 #' k-dist graph calculations
@@ -155,7 +145,7 @@ kdist_info <- function(dist_obj, k = round(log(attr(dist_obj, "Size")))) {
   # j-nearest neighbor (knn$dist_obj)
   knn <- dbscan::kNN(dist_obj, k = k)
 
-  num_knn_sorted <- knn$dist[,k] %>% base::sort()
+  num_knn_sorted <- base::sort(knn$dist[,k])
 
   # y = m*x + n
   intercept_point <- num_knn_sorted[1] # n
@@ -179,37 +169,8 @@ kdist_info <- function(dist_obj, k = round(log(attr(dist_obj, "Size")))) {
   eps_opt <- num_knn_sorted[idx_opt]
 
   return(list(knn_dist_sorted = num_knn_sorted,
-    dist_to_line = dist_to_line,
-    idx_opt = idx_opt,
-    eps_opt = eps_opt,
-    minPts = k + 1))
+              dist_to_line = dist_to_line,
+              idx_opt = idx_opt,
+              eps_opt = eps_opt,
+              minPts = k + 1))
 }
-
-
-#' Find pairwise permutations of attribute names
-#'
-#' Find all possible pairwise wave permuations of attribute names, e.g.
-#' {(som_bmi_s0, som_bmi_s1), (som_bmi_s0, som_bmi_s2),
-#' (som_bmi_s1, som_bmi_s2)}. Autmatically extracts the set of wave suffixes.
-#'
-#' @param df_names A character vector of attribute names.
-#'
-#' @return A list of character vectors with 2 attribute names each.
-#' @export
-#'
-evo_permutations <- function(df_names) {
-  unique_waves <- get_unique_waves(df_names)
-
-  perm <- list()
-
-  for(i in unique_waves) {
-    for(j in unique_waves[-1]) {
-      if(i < j) perm[[length(perm) + 1]] <- c(i,j)
-    }
-  }
-
-  return(perm)
-}
-
-
-

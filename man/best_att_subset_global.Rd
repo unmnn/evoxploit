@@ -4,12 +4,14 @@
 \alias{best_att_subset_global}
 \title{Attribute name stems from CFS attribute subset}
 \usage{
-best_att_subset_global(df, label)
+best_att_subset_global(df, label, suffix)
 }
 \arguments{
 \item{df}{A data frame (without class).}
 
-\item{label}{- The class labels given as factor vector.}
+\item{label}{The class labels given as factor vector.}
+
+\item{suffix}{A string indicating the start of the wave index suffix.}
 }
 \value{
 A character vector of unique attribute name stems.

@@ -5,7 +5,7 @@ output: github_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE
+                      cache = FALSE,
                       fig.path = "man/figures/README-")
 ```
 
@@ -28,13 +28,13 @@ variables names semantics:
 
 - Each variable name (e.g. `waist_circum_s0`) consists of a _stem_ and a _suffix_. 
 The stem is the substring until the last underscore `_` (`wairst_circum`). 
-The suffix is the substring beginning after the last underscore (`s0`).
+The suffix is the substring beginning with the last underscore (`_s0`).
 - The suffix indicates the study wave where the measurement was conducted. For 
 instance `s0` could represent the baseline examinations of a longitudinal 
 study, `s1` the first follow-
 up examinations, `s2` the second follow up examinations and so on.
-- All variables must have a suffix. The suffix must start with "s" and end with 
-a digit.
+- All variables must have a suffix. The suffix must start with "_" and end with 
+at least one digit. The suffix default is `_s`.
 
 ## Installation
 
@@ -53,33 +53,22 @@ devtools::install_github("unmnn/evoxploit")
 library(evoxploit)
 str(epi)
 
-# Apply clustering
-clu <- clustering(epi$data, label = epi$label$label)
-str(clu)
+# Create an Evoxploit object
+epi_evo <- Evoxploit$new(epi$data, epi$label[[1]], wave_suffix = "_s")
 
-# Generate evolution features
-df_evo <- create_CBMS15_attributes(epi$data, 
-                                   label = epi$label$label,
-                                   li_clustering = clu)
-str(df_evo)
-
-
-# Generate sequence features
-df_seq <- create_IDA14_attributes(epi$data, label = epi$label$label)
-str(df_seq)
-
-# Generate simple features describing a study participant's change over time
-df_cha <- create_simple_attributes(epi$data)
-str(df_cha)
+# Print summary to console
+summary(epi_evo)
 ```
 
 
-```{r, fig.height=6.5}
+```{r, fig.height=6.5, message=FALSE}
+library(dplyr)
+library(ggplot2)
 # Calculate Gain Ratio of both original and extracted features w.r.t. the 
 # target variable
-df_combined <- bind_cols(epi$data, df_evo, df_seq, df_cha, epi$label)
-gain_names <- FSelector::gain.ratio(label ~ ., data = df_combined)
+df_evo <- bind_cols(tibble(label = epi_evo$label), epi_evo$all_features)
 
+gain_names <- FSelector::gain.ratio(label ~ ., data = df_evo)
 gain_names %>%
   tibble::rownames_to_column("variable") %>%
   arrange(desc(attr_importance)) %>%
@@ -88,7 +77,6 @@ gain_names %>%
   ggplot(aes(variable, attr_importance)) +
   geom_col() +
   coord_flip()
-
 ```
 
 

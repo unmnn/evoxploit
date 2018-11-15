@@ -4,7 +4,7 @@
 \alias{clustering}
 \title{DBSCAN Clustering on Each Study Wave}
 \usage{
-clustering(df, label, minPts = NULL, eps = NULL)
+clustering(df, label, minPts = NULL, eps = NULL, suffix = "_s", ...)
 }
 \arguments{
 \item{df}{The data frame. TODO: Add requirements, e.g. w.r.t. suffix}

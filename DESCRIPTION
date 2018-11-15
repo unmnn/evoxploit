@@ -1,11 +1,11 @@
 Package: evoxploit
 Type: Package
-Title: Augment Evolution Variables to a Longitudinal Study Dataset
-Version: 0.0.0.9000
+Title: Augment Evolution Features to a Longitudinal Study Dataset
+Version: 0.0.0.9100
 Authors@R: c(person("Uli", "Niemann", email = "uliniemann@hotmail.com", 
                   role = c("aut", "cre")),
              person("Tommy", "Hielscher", role = c("aut")))
-Description: Augment evolution variables to a longitudinal study dataset. 
+Description: Augment evolution features to a longitudinal study dataset. 
     Epidemiological studies serve as basis for the identification of risk 
     factors associated with a medical outcome. Longitudinal epidemiological 
     data comprise information from assessments that are repeatedly conducted 
@@ -18,20 +18,21 @@ Description: Augment evolution variables to a longitudinal study dataset.
 License: MIT | file LICENSE
 Encoding: UTF-8
 LazyData: true
-Depends:
-    dplyr,
-    ggplot2,
-    purrr,
-    magrittr,
-    stringr,
-    tidyr
 Imports:
+    dplyr,
+    checkmate,
     cluster,
     dbscan,
     e1071,
     forcats,
     FSelector,
-    Rdpack
-RoxygenNote: 6.0.1
+    purrr,
+    R6,
+    Rdpack,
+    stringr,
+    tidyr
+Suggests:
+    ggplot2,
+    testthat
+RoxygenNote: 6.1.0
 RdMacros: Rdpack
-Suggests: testthat
