@@ -88,6 +88,7 @@
 #' @import stringr
 #'
 create_CBMS15_attributes <- function(df, label, li_clustering,
+                                     train_lgc = rep(TRUE, nrow(df)),
                                      suffix, verbose = FALSE, ...) {
 
   debug <- FALSE
@@ -343,10 +344,10 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
       paste0("dist_to_medoid", suffix, unique_waves[i])
     if(debug) browser()
 
-    # fraction of instances of class x in eps neighborhood ----
+  # fraction of instances of class x in eps neighborhood ----
     label_levels <- levels(label)
     minPts <- li_clustering[[i]]$clustering_result$minPts
-    dist_matrix <- li_clustering[[i]]$dist %>% as.matrix()
+    dist_matrix <- as.matrix(li_clustering[[i]]$dist)[, train_lgc]
 
     temp <-
       1:nrow(ti_new_atts) %>%
@@ -592,11 +593,9 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
 #' @import purrr
 #' @import stringr
 #'
-create_IDA14_attributes <- function(df, label, suffix,
-                                    train_lgc = rep(TRUE, nrow(df)),
-                                    kdist_sample_size = 50,
-                                    seed = 123,
-                                    verbose = FALSE) {
+create_IDA14_attributes <- function(df, label, train_lgc = rep(TRUE, nrow(df)),
+                                    suffix, kdist_sample_size = 50,
+                                    seed = 123, verbose = FALSE) {
 
   if(verbose) message(paste0("START calculating IDA14 features."))
 

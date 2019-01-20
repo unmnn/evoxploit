@@ -52,10 +52,12 @@ Evoxploit <-
       ..clu = NULL,
       ..minPts = NULL,
       ..eps = NULL,
+      ..train_lgc = NULL,
       ..data_evo = NULL
     ),
     public = list(
       initialize = function(data, label, wave_suffix = "_s", minPts = NULL, eps = NULL,
+                            train_lgc = rep(TRUE, nrow(data)),
                             run = TRUE, verbose = FALSE){
         checkmate::assert_data_frame(data)
         checkmate::assert_true(all(purrr::map_lgl(data, ~ checkmate::test_numeric(.x) | checkmate::test_factor(.x))))
@@ -63,6 +65,7 @@ Evoxploit <-
         checkmate::assert_factor(label)
         checkmate::assert_true(nrow(data) == length(label))
         checkmate::assert_false(any(is.na(label)))
+        checkmate::assert_true(length(train_lgc) == nrow(data))
 
         checkmate::assert_character(wave_suffix)
         if(!is.null(minPts)) checkmate::assert_integerish(minPts)
@@ -75,6 +78,7 @@ Evoxploit <-
         private$..wave_idx <- get_unique_waves(names(data), suffix = private$..wave_suffix)
         private$..minPts <- minPts
         private$..eps <- eps
+        private$..train_lgc <- train_lgc
 
         if(run) self$run(verbose)
       },
@@ -85,10 +89,12 @@ Evoxploit <-
         private$..data_evo[[1]] <- create_CBMS15_attributes(private$..data,
                                                             private$..label,
                                                             private$..clu,
+                                                            private$..train_lgc,
                                                             private$..wave_suffix,
                                                             verbose = verbose)
         private$..data_evo[[2]] <- create_IDA14_attributes(private$..data,
                                                            private$..label,
+                                                           private$..train_lgc,
                                                            private$..wave_suffix,
                                                            verbose = verbose)
         private$..data_evo[[3]] <- create_desc_attributes(private$..data,

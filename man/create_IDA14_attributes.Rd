@@ -4,19 +4,19 @@
 \alias{create_IDA14_attributes}
 \title{Generate IDA'14 Attributes}
 \usage{
-create_IDA14_attributes(df, label, suffix, train_lgc = rep(TRUE,
-  nrow(df)), kdist_sample_size = 50, seed = 123, verbose = FALSE)
+create_IDA14_attributes(df, label, train_lgc = rep(TRUE, nrow(df)),
+  suffix, kdist_sample_size = 50, seed = 123, verbose = FALSE)
 }
 \arguments{
 \item{df}{A data frame.}
 
 \item{label}{The class labels given as factor vector.}
 
-\item{suffix}{A string indicating the start of the wave index suffix.}
-
 \item{train_lgc}{A logical vector. \code{TRUE} elements represent training
 instances of \code{df}. If not set, all instances of \code{df} are
 treated as training instances.}
+
+\item{suffix}{A string indicating the start of the wave index suffix.}
 
 \item{kdist_sample_size}{The number of randomly sampled \eqn{epsilon} values
 drawn from \code{dist_to_line} used as candidates for clustering. Weighted

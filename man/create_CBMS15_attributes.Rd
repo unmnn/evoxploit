@@ -4,8 +4,8 @@
 \alias{create_CBMS15_attributes}
 \title{Generate CBMS'15+ Attributes}
 \usage{
-create_CBMS15_attributes(df, label, li_clustering, suffix,
-  verbose = FALSE, ...)
+create_CBMS15_attributes(df, label, li_clustering, train_lgc = rep(TRUE,
+  nrow(df)), suffix, verbose = FALSE, ...)
 }
 \arguments{
 \item{df}{A data frame.}

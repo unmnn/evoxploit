@@ -4,6 +4,8 @@
 .Ruserdata
 .Rbuildignore
 data-raw/
+NEWS
+test.R
 todo
 readme_cache/
 readme.html
