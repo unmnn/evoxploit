@@ -4,13 +4,20 @@
 \alias{create_CBMS15_attributes}
 \title{Generate CBMS'15+ Attributes}
 \usage{
-create_CBMS15_attributes(df, label, li_clustering, train_lgc = rep(TRUE,
-  nrow(df)), suffix, verbose = FALSE, ...)
+create_CBMS15_attributes(
+  df,
+  label,
+  li_clustering,
+  train_lgc = rep(TRUE, nrow(df)),
+  suffix,
+  verbose = FALSE,
+  ...
+)
 }
 \arguments{
 \item{df}{A data frame.}
 
-\item{label}{The class labels given as factor vector.}
+\item{label}{The target variable, given as either factor or numeric variable.}
 
 \item{li_clustering}{The output of \code{\link{clustering}}.}
 
@@ -82,7 +89,7 @@ Legend:
 \item \strong{x} - a study wave index
 \item \strong{y} - a study wave index, \strong{y} > \strong{x}
 \item \strong{a} - an attribute
-\item \strong{c} - a class label
+\item \strong{c} - the target variable
 }
 }
 \description{

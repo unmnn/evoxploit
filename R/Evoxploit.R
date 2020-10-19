@@ -25,9 +25,8 @@
 #' \item{data: }{(`data.frame`)\cr
 #' The data set with all input features (predictors). The object (created with Predictor$new())
 #' holding the machine learning model and the data.}
-#' \item{target: }{(`factor`) \cr
-#' The target variable (response). Numeric responses
-#' are currently not supported.}
+#' \item{target: }{(`factor` | `numeric`) \cr
+#' The target variable (response).}
 #' \item{wave_suffix: }{(`character(1)`)\cr
 #' The wave suffix given as string.}
 #' \item{minPts: }{(`integer(1)`)\cr
@@ -62,7 +61,7 @@ Evoxploit <-
         checkmate::assert_data_frame(data)
         checkmate::assert_true(all(purrr::map_lgl(data, ~ checkmate::test_numeric(.x) | checkmate::test_factor(.x))))
 
-        checkmate::assert_factor(label)
+        checkmate::assert_true(is.factor(label) | is.numeric(label))
         checkmate::assert_true(nrow(data) == length(label))
         checkmate::assert_false(any(is.na(label)))
         checkmate::assert_true(length(train_lgc) == nrow(data))
@@ -113,11 +112,20 @@ Evoxploit <-
         cat("  - waves: ", paste0(private$..wave_idx, collapse = ", "), "\n")
         cat("", "\n")
         cat("Target:", "\n")
-        cat("  - #classes: ", length(unique(private$..label)), "\n")
-        ta <- prop.table(table(private$..label))
-        sub_max <- ta[ta == max(ta)]
-        cat("  - predominant class: ", paste0(names(sub_max), collapse = ", "),
-            ": ", round(100*sub_max[1]), "%", "\n")
+        if(is.factor(private$..label)) {
+          cat("  - #classes: ", length(unique(private$..label)), "\n")
+          ta <- prop.table(table(private$..label))
+          sub_max <- ta[ta == max(ta)]
+          cat("  - predominant class: ", paste0(names(sub_max), collapse = ", "),
+              ": ", round(100*sub_max[1]), "%", "\n")
+        }else{
+          cat("  - range:", min(private$..label), " - ", max(private$..label))
+          cat("  - 25% quantile:", quantile(private$..label, 0.25))
+          cat("  - mean:", mean(private$..label))
+          cat("  - median:", median(private$..label))
+          cat("  - 75% quantile:", quantile(private$..label, 0.75))
+        }
+
         cat("", "\n")
         cat("Clustering:", "\n")
         if(is.null(private$..clu)) {

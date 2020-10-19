@@ -6,7 +6,7 @@
 #'
 #' @param df A data frame.
 #' @param li_clustering The output of \code{\link{clustering}}.
-#' @param label The class labels given as factor vector.
+#' @param label The target variable, given as either factor or numeric variable.
 #' @param suffix A string indicating the start of the wave index suffix.
 #' @param verbose Whether or not to show some diagnostic messages. Defaults to FALSE.
 #'
@@ -73,7 +73,7 @@
 #' \item \strong{x} - a study wave index
 #' \item \strong{y} - a study wave index, \strong{y} > \strong{x}
 #' \item \strong{a} - an attribute
-#' \item \strong{c} - a class label
+#' \item \strong{c} - the target variable
 #' }
 #'
 #' @seealso \code{\link{create_IDA14_attributes}},
@@ -94,7 +94,7 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
   debug <- FALSE
 
   if(verbose) {
-    process_blocks_total <- 8
+    process_blocks_total <- 10
     process_block <- 1
     message("START calculating features from or inspired by CBMS15")
   }
@@ -345,6 +345,7 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
     if(debug) browser()
 
   # fraction of instances of class x in eps neighborhood ----
+  if(is.factor(label)) {
     label_levels <- levels(label)
     minPts <- li_clustering[[i]]$clustering_result$minPts
     dist_matrix <- as.matrix(li_clustering[[i]]$dist)[, train_lgc]
@@ -369,6 +370,7 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
                           "_in_neighborhood", suffix, unique_waves[i]))
 
       )
+  }
 
     # Silhouette ----
     ti_new_atts$silhouette <-
@@ -377,11 +379,10 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
     names(ti_new_atts)[which(names(ti_new_atts) == "silhouette")] <-
       str_c("silhouette", suffix, unique_waves[i])
 
+    if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
+    if(verbose) process_block <- process_block + 1
+    if(debug) browser()
   }
-
-  if(verbose) message(paste0(process_block, "/", process_blocks_total, " blocks completed."))
-  if(verbose) process_block <- process_block + 1
-  if(debug) browser()
 
   # ~Evolution Features ----
   # Attribute changes ----
@@ -400,13 +401,15 @@ create_CBMS15_attributes <- function(df, label, li_clustering,
                 abs_diff <- real_diff %>% abs()
                 rel_diff <- real_diff / df[,1]
                 return(
-                  bind_cols(real_diff, abs_diff, rel_diff) %>%
+                  {quietly(bind_cols)}(real_diff, abs_diff, rel_diff) %>%
+                    pluck("result") %>%
                     set_names(str_c(c("real_diff", "abs_diff", "rel_diff"),
                                     "_att_", x, suffix, p[1], "_", p[2]))
                 )
               } else {
                 has_changed <- (df[,1] != df[,2]) %>% as.logical()
                 return(
+                  # {quietly(tibble)}(has_changed) %>% pluck("result") %>%
                   tibble(has_changed) %>%
                     set_names(str_c("has_changed", "_att_", x,
                                     suffix, p[1], "_", p[2]))

@@ -4,8 +4,15 @@
 \alias{create_IDA14_attributes}
 \title{Generate IDA'14 Attributes}
 \usage{
-create_IDA14_attributes(df, label, train_lgc = rep(TRUE, nrow(df)),
-  suffix, kdist_sample_size = 50, seed = 123, verbose = FALSE)
+create_IDA14_attributes(
+  df,
+  label,
+  train_lgc = rep(TRUE, nrow(df)),
+  suffix,
+  kdist_sample_size = 50,
+  seed = 123,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{df}{A data frame.}
