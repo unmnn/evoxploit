@@ -106,7 +106,7 @@ best_att_subset_global <- function(df, label, suffix) {
     bind_cols(tibble(label = label))
 
   # get best attribute subset according to cfs
-  cfs_result <- FSelector::cfs(label ~ ., df_cfs)
+  cfs_result <- suppressWarnings(FSelector::cfs(label ~ ., df_cfs))
 
   # return unique attribute stems
   return(cfs_result %>% str_replace(paste0("^(.*)", suffix, "\\d+$"), "\\1") %>% unique())

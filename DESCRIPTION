@@ -1,7 +1,7 @@
 Package: evoxploit
 Type: Package
 Title: Augment Evolution Features to a Longitudinal Study Dataset
-Version: 0.0.0.9102
+Version: 0.0.0.9103
 Authors@R: c(person("Uli", "Niemann", email = "uliniemann@hotmail.com", 
                   role = c("aut", "cre")),
              person("Tommy", "Hielscher", role = c("aut")))

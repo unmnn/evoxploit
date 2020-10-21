@@ -627,7 +627,7 @@ create_IDA14_attributes <- function(df, label, train_lgc = rep(TRUE, nrow(df)),
                     prob = kdist$dist_to_line)
 
         # Perform various clusterings on the sample of epsilon values and
-        # calculate gain ratio w.r.t label
+        # calculate gain ratio or linear correlation w.r.t label
         df_s <- s %>%
           map_df(function(x) {
             clustering_result <- dbscan::dbscan(dist_obj,
@@ -636,24 +636,29 @@ create_IDA14_attributes <- function(df, label, train_lgc = rep(TRUE, nrow(df)),
             cluster_assignment <- clustering_result$cluster
 
             # Assess quality based on class distribution of train index only
-            gain_ratio <- tibble(cluster_assignment_only_train =
+              tmp <- tibble(cluster_assignment_only_train =
                                    cluster_assignment[train_lgc]) %>%
               bind_cols(tibble(label = label) %>% slice(which(train_lgc)) %>%
-                          set_names("label")) %>%
-              FSelector::gain.ratio(label ~ cluster_assignment_only_train,
-                                    data = .) %>% as.numeric()
+                          set_names("label"))
 
-            return(tibble(s = x, gain_ratio = gain_ratio))
+              if(is.factor(label)) {
+                res <- FSelector::gain.ratio(label ~ cluster_assignment_only_train,
+                                             data = tmp)
+              } else {
+                res <- FSelector::linear.correlation(label ~ cluster_assignment_only_train,
+                                             data = tmp)
+              }
+            return(tibble(s = x, importance = as.numeric(res)))
           })
 
-        # Select index with highest gain ratio and re-cluster with the
-        # respective eps value
-        max_gain_ratio <- max(df_s$gain_ratio)
-        if(verbose) message(paste0("Max. gain ratio of sequence feature derived from ", att, " = ", max_gain_ratio, "."))
-        if(verbose & max_gain_ratio == 0) message(paste0("Drop ", att, " since gain ratio == 0."))
-        if(max_gain_ratio > 0) {
-          s_opt <- arrange(df_s, desc(gain_ratio)) %>% pull(s) %>% .[1]
-          # print(max_gain_ratio)
+        # Select index with highest absolute gain ratio or correlation and
+        # re-cluster with the respective eps value
+        if(all(is.na(df_s$importance))) return(NULL)
+        max_importance <- max(abs(df_s$importance), na.rm = TRUE)
+        if(verbose) message(paste0("Max. importance of sequence feature derived from ", att, " = ", max_importance, "."))
+        if(verbose & max_importance == 0) message(paste0("Drop ", att, " since importance == 0."))
+        if(max_importance > 0) {
+          s_opt <- arrange(df_s, desc(importance)) %>% pull(s) %>% .[1]
           clustering_result <- dbscan::dbscan(dist_obj,
                                               eps = kdist$knn_dist_sorted[s_opt],
                                               minPts = kdist$minPts)
